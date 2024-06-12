@@ -68,7 +68,7 @@ static int syscall_vbe_setpix(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint3
 
 static int syscall_task_exec(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) {
 	UNUSED(arg4);
-	task_exec((char *) arg1, (int)arg2, (char **)arg3);
+	task_exec((char *) arg1, (int)arg2, (char**)arg3);
 	return 0;
 }
 

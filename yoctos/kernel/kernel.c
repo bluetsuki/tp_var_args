@@ -56,10 +56,7 @@ void kernel_main(multiboot_info_t *mbi) {
     sti();
     term_puts("Interrupts enabled.\n");
 
-    int argc = 2;
-    char *argv[] = { "shell.exe", "-v", NULL };
 	task_exec("shell.exe", 0, NULL);
-    
 
     term_printf("\nSystem halted.");
     halt();

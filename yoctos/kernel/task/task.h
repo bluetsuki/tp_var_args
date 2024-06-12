@@ -7,6 +7,8 @@
 #include "drivers/term.h"
 
 #define MAX_TASK_COUNT  8
+#define MAX_ARGS 10
+#define MAX_ARGS_LENGTH 100
 
 // Virtual address (1GB) where task user code/data is mapped (i.e. application entry point)
 #define TASK_VIRT_ADDR 0x40000000
@@ -26,8 +28,6 @@ typedef struct {
     uint8_t kernel_stack[65536];        // kernel stack (4KB does not seem enough!)
     uint32_t virt_addr;                 // Start of the task's virtual address space
     uint32_t addr_space_size;           // Size of the task's address space in bytes
-    int argc;
-    char **argv;
 } task_t;
 
 extern void tasks_init();

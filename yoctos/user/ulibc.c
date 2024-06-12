@@ -159,8 +159,3 @@ char *trim(char *line) {
 
     return line;
 }
-
-// Fonction retournant le nombre d’arguments passé à la tâche (0 si aucun argument spécifié) :
-int get_args_count () ;
-// Fonction retournant l’argument d’indice i passé à la tâche, où pour n arguments, le domaine de validité de i est [0, n − 1] :
-char * get_args ( int i ) ;

@@ -26,12 +26,13 @@ static PDE_t pagedir_templ[PAGETABLES_IN_PD];
 // Creates and returns a task from the fixed pool of tasks.
 // This function dynamically allocates the address space of size "size" (in bytes) for the task.
 // Returns NULL if it failed.
-static task_t *task_create(char *name, uint_t addr_space_size, int arg_mem_size, int argc, char **argv) {
+static task_t *task_create(char *name, uint_t addr_space_size, int args_size, int argc, char **argv) {
     // Tasks GDT entries start at gdt_first_task_entry (each task uses one GDT entry)
     extern gdt_entry_t *gdt_first_task_entry;
     gdt_entry_t *gdt_task_tss = gdt_first_task_entry;
 
-    uint_t total_mem_size = addr_space_size + (TASK_STACK_SIZE_MB << 20) + arg_mem_size;
+    
+    int total_mem_size = (TASK_STACK_SIZE_MB * 1024 * 1024) + args_size + addr_space_size;
 
     // TODO
 
@@ -44,7 +45,6 @@ static task_t *task_create(char *name, uint_t addr_space_size, int arg_mem_size,
 
     // Variables declared here to prevent compilation error 
     task_t *t = NULL;
-
 	for (uint_t i = 0; i < MAX_TASK_COUNT; i++) {
         if (!(tasks[i].in_use)) {
             t = &tasks[i];
@@ -65,31 +65,13 @@ static task_t *task_create(char *name, uint_t addr_space_size, int arg_mem_size,
     t->tss_selector = gdt_tss_sel;
 	
 	t->virt_addr = TASK_VIRT_ADDR;
-	t->addr_space_size = addr_space_size;
+    // aggrandir l'esapce d'addr pour les args
+	t->addr_space_size = addr_space_size + args_size;
 
     for (uint_t i = 0; i < PAGETABLES_IN_PD; i++)
     {
         t->pagedir[i] = pagedir_templ[i];
     }
-
-    // Alloue l'espace d'adressage de la tâche
-
-    // Stocke `argc` et `argv` à la fin de l'espace d'adressage de la tâche
-    uint_t arg_mem_start = t->virt_addr + total_mem_size - arg_mem_size;
-    uint_t arg_mem_ptr = arg_mem_start;
-
-    *(int *)arg_mem_ptr = argc;
-    arg_mem_ptr += sizeof(int);
-
-    char **argv_ptr = (char **)arg_mem_ptr;
-    arg_mem_ptr += argc * sizeof(char *);
-
-    for (int i = 0; i < argc; i++) {
-        argv_ptr[i] = (char *)arg_mem_ptr;
-        strncpy((char *)arg_mem_ptr, argv[i], argc);
-        arg_mem_ptr += strlen(argv[i]) + 1;
-    }
-
     tss_t *tss = &t->tss;
 
     tss->cs = GDT_USER_CODE_SELECTOR;
@@ -98,25 +80,15 @@ static task_t *task_create(char *name, uint_t addr_space_size, int arg_mem_size,
     tss->eflags = (1 << 9);
     tss->ss0 = GDT_KERNEL_DATA_SELECTOR;
     tss->esp0 = (uint32_t)(t->kernel_stack) + sizeof(t->kernel_stack);
-    tss->eip = arg_mem_size;
-    tss->esp = tss->ebp = t->virt_addr + arg_mem_size;
-    // tss->eip = t->virt_addr;
+    tss->eip = t->virt_addr;
     // tss->esp = tss->ebp = t->virt_addr + addr_space_size + (TASK_STACK_SIZE_MB << 20);
-    tss->eax = arg_mem_start; // Passe l'adresse de `argc` à la tâche
+    tss->esp = tss->ebp = t->virt_addr + total_mem_size;
+
     uint_t alloc_frame_count = 0;
 	uint_t id = t->id;
-    // alloc_frame_count = paging_alloc(t->pagedir, t->page_tables, t->virt_addr, t->addr_space_size + (TASK_STACK_SIZE_MB << 20), PRIVILEGE_USER);
-    alloc_frame_count = paging_alloc(t->pagedir, t->page_tables, t->virt_addr, total_mem_size, PRIVILEGE_USER);
+    alloc_frame_count = paging_alloc(t->pagedir, t->page_tables, t->virt_addr, t->addr_space_size + (TASK_STACK_SIZE_MB << 20) + args_size, PRIVILEGE_USER);
 
-    // TODO
-    // Look for a free task and if found:
-    // - initializes the task's fields
-    // - initializes its GDT entry and TSS selector
-    // - initializes its TSS structure
-    // - creates its RAM and VBE identity mappings by using the common template page directory
-    // - allocates its address space using the "paging_alloc" function
-
-    // Variables declared here to prevent compilation error
+    
     term_printf("Allocated %dKB of RAM for task %d (\"%s\")\n", alloc_frame_count * PAGE_SIZE / 1024, id, name);
 
     return t;
@@ -212,48 +184,63 @@ void tasks_init() {
 // Once loaded, the task is ready to be executed.
 // Returns NULL if it failed (ie. reached max number of tasks).
 static task_t *task_load(char *filename, int argc, char **argv) {
+    task_t* t = NULL;
 
-	task_t* t = NULL;
+    void* module_addr = module_addr_by_name(filename);
 
-    // Allocation mémoire supplémentaire pour `argc` et `argv`
-    uint_t arg_mem_size = sizeof(int) + argc * sizeof(char *) + sizeof(char) * 256; // Estimation taille totale pour `argc` et `argv`
-    
-	void* module_addr = module_addr_by_name(filename);
-	if (module_addr == NULL) {
-		term_printf("Failed to load binary \"%s\".\n", filename);
-		return NULL;
-	}
-	 
-	uint_t size = module_size_by_name(filename);
-	if (size == -1) {
-		term_printf("Empty binary \"%s\".\n", filename);
-		return NULL;
-	}
+    // Calculer la taille des arguments
+    uint_t args_size = sizeof(int);
+    for (int i = 0; i < argc; i++) {
+        args_size += (strlen(argv[i]) * sizeof(char)) + 1;
+    }
+    args_size += (argc + 1) * sizeof(char *); // Espace pour les pointeurs argv
 
-	t = task_create(filename, size, arg_mem_size, argc, argv);
-	if (!t) {
-		return NULL;
-	}
+    // copie de la mémoire avant le changement de pagination
+    char tmp_argv[MAX_ARGS][MAX_ARGS_LENGTH];
+    for (int i = 0; i < argc; i++) {
+        int len = strlen(argv[i]) + 1;
+        strncpy(tmp_argv[i], argv[i], len);
+        tmp_argv[i][len] = '\0';
+    }
 
-	PDE_t* pagedir = paging_get_current_pagedir();
+    if (module_addr == NULL) {
+        term_printf("Failed to load binary \"%s\".\n", filename);
+        return NULL;
+    }
+     
+    uint_t mod_size = module_size_by_name(filename);
+    if (mod_size == -1) {
+        term_printf("Empty binary \"%s\".\n", filename);
+        return NULL;
+    }
+
+    t = task_create(filename, mod_size, args_size, argc, argv);
+    if (!t) {
+        return NULL;
+    }
+
+    PDE_t* pagedir = paging_get_current_pagedir();
 	paging_load_pagedir(t->pagedir);
-	memcpy((void*)t->virt_addr, module_addr, size + arg_mem_size);
-	paging_load_pagedir(pagedir);
-    // - Create a new task using the "task_create" function.
-    // - Temporarily maps the new task's address space (page directory) to allow the current task to
-    // contiguously write the binary into the new task's address space (make sure to save the current
-    // mapping (page directory) before doing so and restoring it once done).
-    // - IMPORTANT: beware of pointers pointing to addresses in the current task!
-    // Their content won't be reachable during the temporary mapping of the new task.
-    // Thus, make sure to either reference them before the mapping (or copy their content before hand).
+	memcpy((void*)t->virt_addr, module_addr, mod_size);
 
+    // copie argc apres le module
+    memcpy((void*)t->virt_addr + mod_size, &argc, sizeof(argc));
+    int offset = 0;
+    for (int i = 0; i < argc; i++) {
+        int args_len = strlen(tmp_argv[i]) + 1;
+        memcpy((void*)t->virt_addr + mod_size + sizeof(int) + offset, tmp_argv[i], args_len); //Faut les faire un par un
+        offset += args_len;
+    }
+
+	paging_load_pagedir(pagedir);
     return t;
 }
+
 
 // Loads a task and executes it.
 // Returns false if it failed.
 bool task_exec(char *filename, int argc, char **argv) {
-    task_t *t = task_load(filename, argc, argv);
+    task_t *t = task_load(filename,  argc, argv);
     if (!t) {
         return false;
     }
