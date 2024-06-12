@@ -11,6 +11,27 @@
 
 SECTION_DATA static vbe_fb_t fb;
 
+int get_mod_size(char *filename) {
+    int size;
+    syscall(9, filename, &size, 0, 0);
+    return size;
+}
+
+void get_task_addr_by_id(int id, void* addr) {
+    syscall(10, id, &addr, 0, 0);
+    return addr;
+}
+
+int get_args_count() {
+    void* mod_addr;
+    get_task_addr_by_id(1, mod_addr);
+    return 0;
+}
+
+char *get_args (int i) {
+    return NULL;
+}
+
 void sleep(uint_t ms) {
     // TODO
     // Call syscall for sleep

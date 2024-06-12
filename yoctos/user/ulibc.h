@@ -28,4 +28,8 @@ extern void puts(char *str);
 extern void printf(char *fmt, ...);
 extern void set_colors(term_colors_t cols);
 
+extern int get_args_count ();
+extern char *get_args (int i);
+extern int get_mod_size(char *filename);
+extern void get_task_addr_by_id(int id, void *addr);
 #endif

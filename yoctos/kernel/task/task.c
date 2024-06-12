@@ -86,7 +86,7 @@ static task_t *task_create(char *name, uint_t addr_space_size, int args_size, in
 
     uint_t alloc_frame_count = 0;
 	uint_t id = t->id;
-    alloc_frame_count = paging_alloc(t->pagedir, t->page_tables, t->virt_addr, t->addr_space_size + (TASK_STACK_SIZE_MB << 20) + args_size, PRIVILEGE_USER);
+    alloc_frame_count = paging_alloc(t->pagedir, t->page_tables, t->virt_addr, t->addr_space_size + (TASK_STACK_SIZE_MB * 1024 * 1024) + args_size, PRIVILEGE_USER);
 
     
     term_printf("Allocated %dKB of RAM for task %d (\"%s\")\n", alloc_frame_count * PAGE_SIZE / 1024, id, name);
@@ -193,7 +193,6 @@ static task_t *task_load(char *filename, int argc, char **argv) {
     for (int i = 0; i < argc; i++) {
         args_size += (strlen(argv[i]) * sizeof(char)) + 1;
     }
-    args_size += (argc + 1) * sizeof(char *); // Espace pour les pointeurs argv
 
     // copie de la mémoire avant le changement de pagination
     char tmp_argv[MAX_ARGS][MAX_ARGS_LENGTH];
@@ -249,4 +248,17 @@ bool task_exec(char *filename, int argc, char **argv) {
     term_setcolors(cols);
     task_free(t);
     return true;
+}
+
+void* get_task_args(task_t *task, uint_t mod_size) {
+    return (void *)(task->virt_addr + mod_size);
+}
+
+void* get_task_addr_by_id(uint_t id) {
+    for (int i = 0; i < MAX_TASK_COUNT; i++) {
+        if (tasks[i].in_use && tasks[i].id == id) {
+            return &tasks[i].virt_addr;
+        }
+    }
+    return NULL; // Si aucune tâche avec l'ID donné n'est trouvée
 }

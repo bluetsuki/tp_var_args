@@ -45,6 +45,7 @@ static void run() {
         // Attempts to run the specified file
         else {
             putc('\n');
+            // get args in mem
             int id = task_exec(line, 0, NULL);
             if (id == -1) {
                 printf("Failed executing \"%s\"\n", line);

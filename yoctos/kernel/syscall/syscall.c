@@ -80,6 +80,23 @@ static int syscall_putc(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t ar
 	return 0;
 }
 
+static int syscall_mod_size(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+	UNUSED(arg3);
+	UNUSED(arg4);
+	char *filename = (char*)arg2;
+	*filename = module_size_by_name((char*)arg1);
+	return 0;
+}
+
+static int syscall_task_addr_by_id(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) {
+	UNUSED(arg2);
+	UNUSED(arg3);
+	UNUSED(arg4);
+	void* t = (void *)arg2;
+	t = get_task_addr_by_id((int)arg1);
+	return 0;
+}
+
 // Map syscall numbers to functions
 static int (*syscall_func[])(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32_t arg4) = {
     syscall_term_puts,
@@ -90,7 +107,9 @@ static int (*syscall_func[])(uint32_t arg1, uint32_t arg2, uint32_t arg3, uint32
 	syscall_vbe_fb_info,
 	syscall_vbe_setpix,
 	syscall_task_exec,
-	syscall_putc
+	syscall_putc,
+	syscall_mod_size,
+	syscall_task_addr_by_id
 };
 
 // Called by the assembly function: _syscall_handler

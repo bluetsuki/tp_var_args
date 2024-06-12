@@ -7,8 +7,8 @@
 #include "drivers/term.h"
 
 #define MAX_TASK_COUNT  8
-#define MAX_ARGS 10
-#define MAX_ARGS_LENGTH 100
+#define MAX_ARGS 5
+#define MAX_ARGS_LENGTH 50
 
 // Virtual address (1GB) where task user code/data is mapped (i.e. application entry point)
 #define TASK_VIRT_ADDR 0x40000000
@@ -39,5 +39,5 @@ extern void task_switch(uint16_t tss_selector);
 extern uint16_t task_get_current_sel();
 
 extern task_t* get_task_by_selector(uint16_t tss_selector);
-
+extern task_t** get_task_addresses();
 #endif
